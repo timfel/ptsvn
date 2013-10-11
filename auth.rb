@@ -77,4 +77,7 @@ module SvnAccess
   end
 end
 
+admins = File.readlines("/var/svn/authfile")[1].split(/[=,]/)[1..-1].map(&:strip)
+log admins
+exit(0) if admins.include?(ENV["USER"])
 SvnAccess.authorize ? exit(0) : exit(1)
