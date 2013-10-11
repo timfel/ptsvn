@@ -1,11 +1,10 @@
-require "rack/proxy"
-require "rack/protection"
+require "rack/reverse_proxy"
 
 SVN_ROOT = File.expand_path("../svn", __FILE__)
 REPO_PATH = "users"
 
-SVN_HOST = "https://localhost:8443"
-SVN_HOST_PATH = "/svn/pt1_2013/#{REPO_PATH}"
+SVN_HOST = "http://localhost:8443"
+SVN_HOST_PATH = "svn/pt1_2013"
 
 
 module SvnAccess
@@ -16,7 +15,7 @@ module SvnAccess
   end
 
   def mkdir(path)
-    system("svn mkdir #{SVN_HOST}/#{SVN_HOST_PATH} #{REPO_PATH}/#{path}")
+    system("svn mkdir #{SVN_HOST}/#{SVN_HOST_PATH}/#{REPO_PATH}/#{path} --non-interactive -n \"Create #{path}\"")
   end
 
   def cat(path)
@@ -24,6 +23,8 @@ module SvnAccess
   end
 
   def accessible?(user, path)
+    path = path.sub("/users", "")
+
     # don't break out of sandbox
     return false unless File.expand_path(path, "/") =~ /^\/#{user}/
 
@@ -41,24 +42,23 @@ module SvnAccess
   end
 
   def user_folder?(user, path)
-    path_parts = path.split("/")
-    unless path_parts[0] == user
-    end
+    path_parts = path.split("/").reject(&:empty?)
+    path_parts[0] == user
   end
 
   def ensure_svn(user)
-    path = File.join(SVN_ROOT, user)
-    Dir.mkdir(path) unless Dir.exist?(path)
+    mkdir(user) unless exists?(user)
   end
 
   def call(env)
     user = env["REMOTE_USER"].downcase
     ensure_svn(user)
 
-    unless accessible?(user, env["PATH"])
-      [403, {}, ""]
-    else
+    if (env["PATH_INFO"].start_with?(REPO_PATH) && accessible?(user, env["PATH"])) ||
+        env["PATH_INFO"].start_with?("!svn")
       @app.call(env)
+    else
+      [403, {"Content-Type" => "text/plain"}, "Invalid URL"]
     end
   end
 
@@ -67,25 +67,7 @@ module SvnAccess
   end
 end
 
-class LocalSvnProxy < Rack::Proxy
-  def rewrite_env(env)
-    # @http_host = env["HTTP_HOST"]
-    # %w[HTTP_HOST REQUEST_URI].each do ||
-    # end
-    env["HTTP_HOST"] = SVN_HOST
-  end
-
-  def rewrite_response(triplet)
-    status, headers, body = triplet
-    # %w[Location Content-Location URI].each do |header|
-    #   if headers[header]
-    #     headers[header].gsub!("localhost", "#{@http_host}")
-    #   end
-    # end
-    triplet
-  end
-end
-
-use Rack::Protection, :except => :session_hijacking
 use SvnAccess
-run LocalSvnProxy.new
+app = Rack::ReverseProxy.new
+app.send :reverse_proxy, %r{/(.*)$}, "#{SVN_HOST}/#{SVN_HOST_PATH}/$1"
+run app

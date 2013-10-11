@@ -1,3 +1,2 @@
 source :rubygems
-gem "rack-protection"
-gem "rack-proxy"
+gem "rack-reverse-proxy"
