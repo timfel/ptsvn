@@ -51,14 +51,17 @@ module SvnAccess
   end
 
   def call(env)
+    env["REMOTE_USER"] ||= "test.user"
     user = env["REMOTE_USER"].downcase
     ensure_svn(user)
 
     if (env["PATH_INFO"].start_with?(REPO_PATH) && accessible?(user, env["PATH"])) ||
         env["PATH_INFO"].start_with?("!svn")
-      @app.call(env)
+      r = @app.call(env)
+      p r
+      r
     else
-      [403, {"Content-Type" => "text/plain"}, "Invalid URL"]
+      [403, {"Content-Type" => "text/plain"}, ["Invalid URL"]]
     end
   end
 
@@ -67,7 +70,11 @@ module SvnAccess
   end
 end
 
-use SvnAccess
-app = Rack::ReverseProxy.new
-app.send :reverse_proxy, %r{/(.*)$}, "#{SVN_HOST}/#{SVN_HOST_PATH}/$1"
-run app
+# app = Rack::ReverseProxy.new
+# app.send :reverse_proxy, %r{/pt/(.*)$}, "#{SVN_HOST}/#{SVN_HOST_PATH}/$1"
+# use app
+# use Rack::ReverseProxy do
+#   reverse_proxy %r{/pt/(.*)$}, "#{SVN_HOST}/#{SVN_HOST_PATH}/$1"
+# end
+run SvnAccess
+
