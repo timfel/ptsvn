@@ -92,7 +92,7 @@ end
 
 admins = File.readlines("/var/svn/authfile")[1].split(/[=,]/)[1..-1].map(&:strip)
 #log admins
-exit(0) if admins.include?(ENV["USER"])
+exit(0) if admins.include?(ENV["USER"].downcase)
 if SvnAccess.authorize 
     log "> yes\n"
     exit(0)
